@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['error'] = 'Database error: ' . $e->getMessage();
     }
 
-    header('Location: view-event.php?id=' . $eventId);
+    header('Location: event.php?id=' . $eventId);
     exit();
 } else {
     header('Location: events.php');
