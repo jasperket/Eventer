@@ -1,6 +1,6 @@
 TODO
 
-- [ ] Add home page
+- [x] Add home page
 - [ ] Add register page
 - [ ] Add login page
 - [ ] Add event page
