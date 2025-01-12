@@ -18,13 +18,6 @@ A PHP-based event management system that allows users to create, manage, and reg
 - Event search and filtering
 - Comprehensive event details including date, location, and description
 
-### Registration System
-
-- Event registration with automatic status handling
-- Waitlist support when events reach capacity
-- Registration status tracking (pending, confirmed, cancelled, waitlisted)
-- Automatic waitlist promotion when spots become available
-
 ## Installation
 
 1. Clone the repository:
