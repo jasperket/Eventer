@@ -32,6 +32,60 @@ class Event
         }
     }
 
+    public function getHostedEvents($userId)
+    {
+        try {
+            $query = "SELECT e.*, u.username as creator_name,
+                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count
+                     FROM events e
+                     JOIN users u ON e.creator_id = u.id
+                     WHERE e.creator_id = ?
+                     ORDER BY 
+                        CASE 
+                            WHEN e.status = 'published' AND e.event_date > NOW() THEN 1
+                            WHEN e.status = 'draft' THEN 2
+                            ELSE 3
+                        END,
+                        e.event_date DESC";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$userId]);
+            
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error fetching hosted events: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function getRegisteredEvents($userId)
+    {
+        try {
+            $query = "SELECT e.*, u.username as creator_name,
+                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count,
+                     r.status as registration_status
+                     FROM events e
+                     JOIN users u ON e.creator_id = u.id
+                     JOIN registrations r ON e.id = r.event_id
+                     WHERE r.user_id = ?
+                     ORDER BY 
+                        CASE 
+                            WHEN e.event_date > NOW() AND r.status IN ('confirmed', 'pending', 'waitlisted') THEN 1
+                            WHEN e.event_date > NOW() AND r.status = 'cancelled' THEN 2
+                            ELSE 3
+                        END,
+                        e.event_date DESC";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$userId]);
+            
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error fetching registered events: ' . $e->getMessage();
+            return false;
+        }
+    }
+
     public function getEventById($eventId)
     {
         try {
