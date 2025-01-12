@@ -65,6 +65,44 @@ class Event
         }
     }
 
+    public function delete($eventId, $userId) 
+    {
+        try {
+            $this->db->beginTransaction();
+            
+            // Check if user is the event creator
+            $event = $this->getEventById($eventId);
+            if (!$event || $event['creator_id'] !== $userId) {
+                $this->errors['permission'] = 'You do not have permission to delete this event';
+                $this->db->rollBack();
+                return false;
+            }
+
+            // Delete registrations first
+            $deleteRegistrationsQuery = "DELETE FROM registrations WHERE event_id = ?";
+            $deleteRegistrationsStmt = $this->db->prepare($deleteRegistrationsQuery);
+            $deleteRegistrationsStmt->execute([$eventId]);
+
+            // Then delete the event
+            $deleteEventQuery = "DELETE FROM events WHERE id = ? AND creator_id = ?";
+            $deleteEventStmt = $this->db->prepare($deleteEventQuery);
+            $deleteEventStmt->execute([$eventId, $userId]);
+
+            if ($deleteEventStmt->rowCount() > 0) {
+                $this->db->commit();
+                return true;
+            } else {
+                $this->db->rollBack();
+                $this->errors['database'] = 'Failed to delete event';
+                return false;
+            }
+        } catch (PDOException $e) {
+            $this->db->rollBack();
+            $this->errors['database'] = 'Database error: ' . $e->getMessage();
+            return false;
+        }
+    }
+
     public function validate($data)
     {
         $this->errors = [];

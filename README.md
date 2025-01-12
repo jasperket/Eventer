@@ -6,7 +6,7 @@ TODO
 - [x] Add event page
 - [x] Add event create page
 - [x] Add event view page
-- [ ] Add event edit page
-- [ ] Add event delete functionality
+- [x] Add event edit page
+- [x] Add event delete functionality
 - [ ] Add my events page
-- [ ] Add registered events page
+- [ ] Add manage registrations page
