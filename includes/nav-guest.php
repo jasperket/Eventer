@@ -1,3 +1,5 @@
+<?php require_once 'header.php' ?>
+
 <div class="h-screen flex flex-col">
     <div class="pt-8">
         <header class="flex items-center justify-between">
