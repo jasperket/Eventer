@@ -99,10 +99,20 @@ require_once 'includes/nav-auth.php';
                                     class="flex-1 bg-red-600 text-center text-white font-bold py-2 rounded-lg hover:bg-red-500">
                                     View Details
                                 </a>
-                                <a href="edit-event.php?id=<?php echo $event['id']; ?>"
-                                    class="px-4 py-2 bg-neutral-800 text-white rounded hover:bg-neutral-700">
-                                    Edit
-                                </a>
+                                <div class="flex gap-2">
+                                    <a href="edit-event.php?id=<?php echo $event['id']; ?>"
+                                        class="px-4 py-2 bg-neutral-800 text-white rounded hover:bg-neutral-700">
+                                        Edit
+                                    </a>
+                                    <form action="delete-event.php" method="post" class="inline"
+                                        onsubmit="return confirm('Are you sure you want to delete this event? This action cannot be undone.');">
+                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                        <button type="submit"
+                                            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
