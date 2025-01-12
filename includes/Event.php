@@ -11,6 +11,27 @@ class Event
         $this->db = Database::getInstance()->getConnection();
     }
 
+    public function getUpcomingEvents()
+    {
+        try {
+            $query = "SELECT e.*, u.username as creator_name,
+                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count
+                     FROM events e
+                     JOIN users u ON e.creator_id = u.id
+                     WHERE e.event_date > NOW()
+                     AND e.status = 'published'
+                     ORDER BY e.event_date ASC";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute();
+            
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error fetching events: ' . $e->getMessage();
+            return false;
+        }
+    }
+
     public function validate($data)
     {
         $this->errors = [];
