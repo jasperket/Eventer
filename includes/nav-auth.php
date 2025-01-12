@@ -3,9 +3,7 @@
 <div class="h-screen flex flex-col">
     <div class="pt-8">
         <header class="flex items-center gap-8">
-            <a href="/" class="hover:opacity-80">
-                <h2 class="text-4xl font-bold text-red-500">Eventer</h2>
-            </a>
+            <h2 class="text-4xl font-bold text-red-500">Eventer</h2>
             <div class="flex gap-2">
                 <a href="events.php" class="px-4 py-2 rounded hover:underline">All Events</a>
                 <a href="registered-events.php" class="px-4 py-2 rounded hover:underline">Registered Events</a>

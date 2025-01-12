@@ -32,6 +32,39 @@ class Event
         }
     }
 
+    public function getEventById($eventId)
+    {
+        try {
+            $query = "SELECT e.*, u.username as creator_name,
+                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count
+                     FROM events e
+                     JOIN users u ON e.creator_id = u.id
+                     WHERE e.id = ?";
+            
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$eventId]);
+            
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error fetching event: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function getUserRegistrationStatus($eventId, $userId)
+    {
+        try {
+            $query = "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$eventId, $userId]);
+            
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error checking registration status: ' . $e->getMessage();
+            return false;
+        }
+    }
+
     public function validate($data)
     {
         $this->errors = [];
@@ -141,6 +174,7 @@ class Event
             $capacityQuery = "SELECT e.capacity, COUNT(r.id) as current_registrations 
                             FROM events e 
                             LEFT JOIN registrations r ON e.id = r.event_id 
+                            AND r.status != 'cancelled'
                             WHERE e.id = ? 
                             GROUP BY e.id, e.capacity";
             
@@ -149,8 +183,13 @@ class Event
             $capacityInfo = $capacityStmt->fetch();
 
             if ($capacityInfo && $capacityInfo['current_registrations'] >= $capacityInfo['capacity']) {
-                $this->errors['registration'] = 'Event has reached maximum capacity';
-                return false;
+                // If capacity is full and waitlist is requested, set status to waitlisted
+                if (isset($_POST['waitlist'])) {
+                    $status = 'waitlisted';
+                } else {
+                    $this->errors['registration'] = 'Event has reached maximum capacity';
+                    return false;
+                }
             }
 
             // Create the registration
