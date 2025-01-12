@@ -107,7 +107,7 @@ class Event
         }
 
         // Status validation
-        $validStatuses = ['draft', 'published'];
+        $validStatuses = ['draft', 'published', 'cancelled'];
         if (!in_array($data['status'], $validStatuses)) {
             $this->errors['status'] = 'Invalid status';
         }
@@ -149,6 +149,88 @@ class Event
 
             $this->db->commit();
             return $eventId;
+
+        } catch (PDOException $e) {
+            $this->db->rollBack();
+            $this->errors['database'] = 'Database error: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function update($data)
+    {
+        if (!$this->validate($data)) {
+            return false;
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            // Check if the event exists and belongs to the current user
+            $event = $this->getEventById($data['id']);
+            if (!$event || $event['creator_id'] !== $_SESSION['user_id']) {
+                $this->errors['database'] = 'You do not have permission to edit this event';
+                $this->db->rollBack();
+                return false;
+            }
+
+            // Check capacity against current registrations
+            $registeredCount = $event['registered_count'];
+            if ($data['capacity'] < $registeredCount) {
+                $this->errors['capacity'] = 'New capacity cannot be less than current registrations';
+                $this->db->rollBack();
+                return false;
+            }
+
+            $query = "UPDATE events 
+                     SET title = :title, 
+                         description = :description,
+                         event_date = :event_date,
+                         location = :location,
+                         capacity = :capacity,
+                         status = :status
+                     WHERE id = :id AND creator_id = :creator_id";
+
+            $stmt = $this->db->prepare($query);
+            
+            $result = $stmt->execute([
+                'id' => $data['id'],
+                'creator_id' => $_SESSION['user_id'],
+                'title' => $data['title'],
+                'description' => $data['description'],
+                'event_date' => $data['event_date'],
+                'location' => $data['location'],
+                'capacity' => $data['capacity'],
+                'status' => $data['status']
+            ]);
+
+            // If event is cancelled, cancel all pending registrations
+            if ($data['status'] === 'cancelled') {
+                $cancelQuery = "UPDATE registrations 
+                              SET status = 'cancelled' 
+                              WHERE event_id = ? AND status != 'cancelled'";
+                $cancelStmt = $this->db->prepare($cancelQuery);
+                $cancelStmt->execute([$data['id']]);
+            }
+
+            // Check if capacity was increased
+            if ($data['capacity'] > $event['capacity']) {
+                // Move waitlisted registrations to confirmed if there's new capacity
+                $newSpots = $data['capacity'] - $registeredCount;
+                if ($newSpots > 0) {
+                    $updateWaitlistQuery = "UPDATE registrations 
+                                          SET status = 'confirmed' 
+                                          WHERE event_id = ? 
+                                          AND status = 'waitlisted' 
+                                          ORDER BY registered_at ASC 
+                                          LIMIT ?";
+                    $waitlistStmt = $this->db->prepare($updateWaitlistQuery);
+                    $waitlistStmt->execute([$data['id'], $newSpots]);
+                }
+            }
+
+            $this->db->commit();
+            return true;
 
         } catch (PDOException $e) {
             $this->db->rollBack();
