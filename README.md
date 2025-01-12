@@ -52,12 +52,6 @@ A PHP-based event management system that allows users to create, manage, and reg
 
 4. Set up your web server to point to the project directory.
 
-5. Ensure proper file permissions:
-   ```bash
-   chmod 755 -R /path/to/project
-   chmod 777 -R /path/to/project/uploads  # If you add file uploads
-   ```
-
 ## Project Structure
 
 ```
