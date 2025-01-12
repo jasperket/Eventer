@@ -25,9 +25,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $old = $data;
 
-    if ($event->create($data)) {
+    if ($eventId = $event->create($data)) {
         $_SESSION['success'] = 'Event created successfully!';
-        header('Location: my-events.php');
+        header('Location: event.php?id=' . $eventId);
         exit();
     } else {
         $errors = $event->getErrors();
