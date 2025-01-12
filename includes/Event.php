@@ -1,15 +1,18 @@
 <?php
 require_once 'Database.php';
 
-class Event {
+class Event
+{
     private $db;
     private $errors = [];
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->db = Database::getInstance()->getConnection();
     }
 
-    public function validate($data) {
+    public function validate($data)
+    {
         $this->errors = [];
 
         // Title validation
@@ -58,19 +61,22 @@ class Event {
         return empty($this->errors);
     }
 
-    public function create($data) {
+    public function create($data)
+    {
         if (!$this->validate($data)) {
             return false;
         }
 
         try {
+            $this->db->beginTransaction();
+
             $query = "INSERT INTO events (creator_id, title, description, event_date, location, capacity, status) 
                      VALUES (:creator_id, :title, :description, :event_date, :location, :capacity, :status)";
-            
+
             $stmt = $this->db->prepare($query);
             
             $stmt->execute([
-                'creator_id' => $_SESSION['user_id'], // We'll need to implement session handling
+                'creator_id' => $_SESSION['user_id'],
                 'title' => $data['title'],
                 'description' => $data['description'],
                 'event_date' => $data['event_date'],
@@ -79,14 +85,70 @@ class Event {
                 'status' => $data['status']
             ]);
 
-            return $this->db->lastInsertId();
+            $eventId = $this->db->lastInsertId();
+
+            // Register the creator automatically
+            if (!$this->registerUser($eventId, $_SESSION['user_id'], 'confirmed')) {
+                $this->db->rollBack();
+                return false;
+            }
+
+            $this->db->commit();
+            return $eventId;
+
         } catch (PDOException $e) {
+            $this->db->rollBack();
             $this->errors['database'] = 'Database error: ' . $e->getMessage();
             return false;
         }
     }
 
-    public function getErrors() {
+    public function registerUser($eventId, $userId, $status = 'pending')
+    {
+        try {
+            // Check if user is already registered
+            $checkQuery = "SELECT COUNT(*) FROM registrations WHERE user_id = ? AND event_id = ?";
+            $checkStmt = $this->db->prepare($checkQuery);
+            $checkStmt->execute([$userId, $eventId]);
+            
+            if ($checkStmt->fetchColumn() > 0) {
+                $this->errors['registration'] = 'User is already registered for this event';
+                return false;
+            }
+
+            // Check event capacity
+            $capacityQuery = "SELECT e.capacity, COUNT(r.id) as current_registrations 
+                            FROM events e 
+                            LEFT JOIN registrations r ON e.id = r.event_id 
+                            WHERE e.id = ? 
+                            GROUP BY e.id, e.capacity";
+            
+            $capacityStmt = $this->db->prepare($capacityQuery);
+            $capacityStmt->execute([$eventId]);
+            $capacityInfo = $capacityStmt->fetch();
+
+            if ($capacityInfo && $capacityInfo['current_registrations'] >= $capacityInfo['capacity']) {
+                $this->errors['registration'] = 'Event has reached maximum capacity';
+                return false;
+            }
+
+            // Create the registration
+            $registrationQuery = "INSERT INTO registrations (user_id, event_id, status) 
+                                VALUES (?, ?, ?)";
+            
+            $registrationStmt = $this->db->prepare($registrationQuery);
+            $registrationStmt->execute([$userId, $eventId, $status]);
+
+            return true;
+
+        } catch (PDOException $e) {
+            $this->errors['registration'] = 'Registration failed: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function getErrors()
+    {
         return $this->errors;
     }
 }
