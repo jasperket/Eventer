@@ -21,10 +21,10 @@ class Event
                      WHERE e.event_date > NOW()
                      AND e.status = 'published'
                      ORDER BY e.event_date ASC";
-            
+
             $stmt = $this->db->prepare($query);
             $stmt->execute();
-            
+
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             $this->errors['database'] = 'Error fetching events: ' . $e->getMessage();
@@ -47,10 +47,10 @@ class Event
                             ELSE 3
                         END,
                         e.event_date DESC";
-            
+
             $stmt = $this->db->prepare($query);
             $stmt->execute([$userId]);
-            
+
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             $this->errors['database'] = 'Error fetching hosted events: ' . $e->getMessage();
@@ -75,10 +75,10 @@ class Event
                             ELSE 3
                         END,
                         e.event_date DESC";
-            
+
             $stmt = $this->db->prepare($query);
             $stmt->execute([$userId]);
-            
+
             return $stmt->fetchAll();
         } catch (PDOException $e) {
             $this->errors['database'] = 'Error fetching registered events: ' . $e->getMessage();
@@ -94,10 +94,10 @@ class Event
                      FROM events e
                      JOIN users u ON e.creator_id = u.id
                      WHERE e.id = ?";
-            
+
             $stmt = $this->db->prepare($query);
             $stmt->execute([$eventId]);
-            
+
             return $stmt->fetch();
         } catch (PDOException $e) {
             $this->errors['database'] = 'Error fetching event: ' . $e->getMessage();
@@ -111,7 +111,7 @@ class Event
             $query = "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?";
             $stmt = $this->db->prepare($query);
             $stmt->execute([$eventId, $userId]);
-            
+
             return $stmt->fetch();
         } catch (PDOException $e) {
             $this->errors['database'] = 'Error checking registration status: ' . $e->getMessage();
@@ -119,11 +119,11 @@ class Event
         }
     }
 
-    public function delete($eventId, $userId) 
+    public function delete($eventId, $userId)
     {
         try {
             $this->db->beginTransaction();
-            
+
             // Check if user is the event creator
             $event = $this->getEventById($eventId);
             if (!$event || $event['creator_id'] !== $userId) {
@@ -220,7 +220,7 @@ class Event
                      VALUES (:creator_id, :title, :description, :event_date, :location, :capacity, :status)";
 
             $stmt = $this->db->prepare($query);
-            
+
             $stmt->execute([
                 'creator_id' => $_SESSION['user_id'],
                 'title' => $data['title'],
@@ -241,7 +241,6 @@ class Event
 
             $this->db->commit();
             return $eventId;
-
         } catch (PDOException $e) {
             $this->db->rollBack();
             $this->errors['database'] = 'Database error: ' . $e->getMessage();
@@ -284,7 +283,7 @@ class Event
                      WHERE id = :id AND creator_id = :creator_id";
 
             $stmt = $this->db->prepare($query);
-            
+
             $result = $stmt->execute([
                 'id' => $data['id'],
                 'creator_id' => $_SESSION['user_id'],
@@ -323,7 +322,6 @@ class Event
 
             $this->db->commit();
             return true;
-
         } catch (PDOException $e) {
             $this->db->rollBack();
             $this->errors['database'] = 'Database error: ' . $e->getMessage();
@@ -338,7 +336,7 @@ class Event
             $checkQuery = "SELECT COUNT(*) FROM registrations WHERE user_id = ? AND event_id = ?";
             $checkStmt = $this->db->prepare($checkQuery);
             $checkStmt->execute([$userId, $eventId]);
-            
+
             if ($checkStmt->fetchColumn() > 0) {
                 $this->errors['registration'] = 'User is already registered for this event';
                 return false;
@@ -351,7 +349,7 @@ class Event
                             AND r.status != 'cancelled'
                             WHERE e.id = ? 
                             GROUP BY e.id, e.capacity";
-            
+
             $capacityStmt = $this->db->prepare($capacityQuery);
             $capacityStmt->execute([$eventId]);
             $capacityInfo = $capacityStmt->fetch();
@@ -369,14 +367,76 @@ class Event
             // Create the registration
             $registrationQuery = "INSERT INTO registrations (user_id, event_id, status) 
                                 VALUES (?, ?, ?)";
-            
+
             $registrationStmt = $this->db->prepare($registrationQuery);
             $registrationStmt->execute([$userId, $eventId, $status]);
 
             return true;
-
         } catch (PDOException $e) {
             $this->errors['registration'] = 'Registration failed: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function getEventRegistrations($userId)
+    {
+        try {
+            $query = "SELECT r.*, u.username, e.title as event_title, e.event_date,
+                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count,
+                     e.capacity
+                     FROM registrations r
+                     JOIN events e ON r.event_id = e.id
+                     JOIN users u ON r.user_id = u.id
+                     WHERE e.creator_id = ?
+                     AND r.status NOT IN ('confirmed', 'cancelled')
+                     ORDER BY e.event_date ASC, r.registered_at ASC";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$userId]);
+
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error fetching registrations: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function updateRegistrationStatus($registrationId, $newStatus, $userId)
+    {
+        try {
+            // Verify that the user is the event creator
+            $query = "SELECT e.creator_id, e.capacity, r.event_id,
+                     (SELECT COUNT(*) FROM registrations 
+                      WHERE event_id = r.event_id AND status = 'confirmed') as confirmed_count
+                     FROM registrations r
+                     JOIN events e ON r.event_id = e.id
+                     WHERE r.id = ?";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$registrationId]);
+            $registration = $stmt->fetch();
+
+            if (!$registration || $registration['creator_id'] !== $userId) {
+                $this->errors['permission'] = 'You do not have permission to update this registration';
+                return false;
+            }
+
+            // If changing to confirmed, check capacity
+            if (
+                $newStatus === 'confirmed' &&
+                $registration['confirmed_count'] >= $registration['capacity']
+            ) {
+                $this->errors['capacity'] = 'Event has reached maximum capacity';
+                return false;
+            }
+
+            $query = "UPDATE registrations SET status = ? WHERE id = ?";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$newStatus, $registrationId]);
+
+            return true;
+        } catch (PDOException $e) {
+            $this->errors['database'] = 'Error updating registration: ' . $e->getMessage();
             return false;
         }
     }
