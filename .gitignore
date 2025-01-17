@@ -1,1 +1,4 @@
 repomix-output.txt
+
+/logs/*
+!/logs/.gitkeep
