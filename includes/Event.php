@@ -1,5 +1,7 @@
 <?php
 require_once 'Database.php';
+require_once 'Logger.php';
+require_once 'logger-utils.php';
 
 class Event
 {
@@ -8,15 +10,20 @@ class Event
 
     public function __construct()
     {
-        $this->db = Database::getInstance()->getConnection();
+        try {
+            $this->db = Database::getInstance()->getConnection();
+            logger()->debug('Event class initialized');
+        } catch (PDOException $e) {
+            logException($e, 'Failed to initialize Event class');
+            throw $e;
+        }
     }
 
-    /**
-     * Get all upcoming published events
-     */
     public function getUpcomingEvents()
     {
         try {
+            logger()->debug('Fetching upcoming events');
+
             $query = "SELECT e.*, u.username as creator_name,
                      COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
@@ -31,20 +38,25 @@ class Event
 
             $stmt = $this->db->prepare($query);
             $stmt->execute();
+            $events = $stmt->fetchAll();
 
-            return $stmt->fetchAll();
+            logger()->info('Successfully fetched upcoming events', [
+                'count' => count($events)
+            ]);
+
+            return $events;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query);
             $this->errors['database'] = 'Error fetching events: ' . $e->getMessage();
             return false;
         }
     }
 
-    /**
-     * Get all events hosted by a specific user
-     */
     public function getHostedEvents($userId)
     {
         try {
+            logger()->debug('Fetching hosted events', ['userId' => $userId]);
+
             $query = "SELECT e.*, u.username as creator_name,
                      COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
@@ -64,21 +76,26 @@ class Event
 
             $stmt = $this->db->prepare($query);
             $stmt->execute([$userId]);
+            $events = $stmt->fetchAll();
 
-            return $stmt->fetchAll();
+            logger()->info('Successfully fetched hosted events', [
+                'userId' => $userId,
+                'count' => count($events)
+            ]);
+
+            return $events;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query, [$userId]);
             $this->errors['database'] = 'Error fetching hosted events: ' . $e->getMessage();
             return false;
         }
     }
 
-
-    /**
-     * Get all events a user has registered for
-     */
     public function getRegisteredEvents($userId)
     {
         try {
+            logger()->debug('Fetching registered events', ['userId' => $userId]);
+
             $query = "SELECT e.*, u.username as creator_name,
                      r.status as registration_status,
                      COUNT(DISTINCT r2.id) as registered_count
@@ -99,20 +116,26 @@ class Event
 
             $stmt = $this->db->prepare($query);
             $stmt->execute([$userId]);
+            $events = $stmt->fetchAll();
 
-            return $stmt->fetchAll();
+            logger()->info('Successfully fetched registered events', [
+                'userId' => $userId,
+                'count' => count($events)
+            ]);
+
+            return $events;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query, [$userId]);
             $this->errors['database'] = 'Error fetching registered events: ' . $e->getMessage();
             return false;
         }
     }
 
-    /**
-     * Get a specific event by ID with registration count
-     */
     public function getEventById($eventId)
     {
         try {
+            logger()->debug('Fetching event details', ['eventId' => $eventId]);
+
             $query = "SELECT e.*, u.username as creator_name,
                      COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
@@ -125,123 +148,41 @@ class Event
 
             $stmt = $this->db->prepare($query);
             $stmt->execute([$eventId]);
+            $event = $stmt->fetch();
 
-            return $stmt->fetch();
+            if ($event) {
+                logger()->info('Successfully fetched event details', [
+                    'eventId' => $eventId,
+                    'title' => $event['title'],
+                    'status' => $event['status']
+                ]);
+            } else {
+                logger()->warning('Event not found', ['eventId' => $eventId]);
+            }
+
+            return $event;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query, [$eventId]);
             $this->errors['database'] = 'Error fetching event: ' . $e->getMessage();
             return false;
         }
     }
 
-    public function getUserRegistrationStatus($eventId, $userId)
-    {
-        try {
-            $query = "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?";
-            $stmt = $this->db->prepare($query);
-            $stmt->execute([$eventId, $userId]);
-
-            return $stmt->fetch();
-        } catch (PDOException $e) {
-            $this->errors['database'] = 'Error checking registration status: ' . $e->getMessage();
-            return false;
-        }
-    }
-
-    public function delete($eventId, $userId)
-    {
-        try {
-            $this->db->beginTransaction();
-
-            // Check if user is the event creator
-            $event = $this->getEventById($eventId);
-            if (!$event || $event['creator_id'] !== $userId) {
-                $this->errors['permission'] = 'You do not have permission to delete this event';
-                $this->db->rollBack();
-                return false;
-            }
-
-            // Delete registrations first
-            $deleteRegistrationsQuery = "DELETE FROM registrations WHERE event_id = ?";
-            $deleteRegistrationsStmt = $this->db->prepare($deleteRegistrationsQuery);
-            $deleteRegistrationsStmt->execute([$eventId]);
-
-            // Then delete the event
-            $deleteEventQuery = "DELETE FROM events WHERE id = ? AND creator_id = ?";
-            $deleteEventStmt = $this->db->prepare($deleteEventQuery);
-            $deleteEventStmt->execute([$eventId, $userId]);
-
-            if ($deleteEventStmt->rowCount() > 0) {
-                $this->db->commit();
-                return true;
-            } else {
-                $this->db->rollBack();
-                $this->errors['database'] = 'Failed to delete event';
-                return false;
-            }
-        } catch (PDOException $e) {
-            $this->db->rollBack();
-            $this->errors['database'] = 'Database error: ' . $e->getMessage();
-            return false;
-        }
-    }
-
-    public function validate($data)
-    {
-        $this->errors = [];
-
-        // Title validation
-        if (empty($data['title'])) {
-            $this->errors['title'] = 'Title is required';
-        } elseif (strlen($data['title']) > 100) {
-            $this->errors['title'] = 'Title must be less than 100 characters';
-        }
-
-        // Description validation
-        if (empty($data['description'])) {
-            $this->errors['description'] = 'Description is required';
-        }
-
-        // Event date validation
-        if (empty($data['event_date'])) {
-            $this->errors['event_date'] = 'Event date is required';
-        } else {
-            $eventDate = strtotime($data['event_date']);
-            $now = time();
-            if ($eventDate < $now) {
-                $this->errors['event_date'] = 'Event date cannot be in the past';
-            }
-        }
-
-        // Location validation
-        if (empty($data['location'])) {
-            $this->errors['location'] = 'Location is required';
-        } elseif (strlen($data['location']) > 255) {
-            $this->errors['location'] = 'Location must be less than 255 characters';
-        }
-
-        // Capacity validation
-        if (empty($data['capacity'])) {
-            $this->errors['capacity'] = 'Capacity is required';
-        } elseif (!is_numeric($data['capacity']) || $data['capacity'] < 1) {
-            $this->errors['capacity'] = 'Capacity must be a positive number';
-        }
-
-        // Status validation
-        $validStatuses = ['draft', 'published', 'cancelled'];
-        if (!in_array($data['status'], $validStatuses)) {
-            $this->errors['status'] = 'Invalid status';
-        }
-
-        return empty($this->errors);
-    }
-
     public function create($data)
     {
-        if (!$this->validate($data)) {
-            return false;
-        }
-
         try {
+            logger()->info('Attempting to create event', [
+                'title' => $data['title'],
+                'creator_id' => $_SESSION['user_id']
+            ]);
+
+            if (!$this->validate($data)) {
+                logger()->warning('Event validation failed', [
+                    'errors' => $this->errors
+                ]);
+                return false;
+            }
+
             $this->db->beginTransaction();
 
             $query = "INSERT INTO events (creator_id, title, description, event_date, location, capacity, status) 
@@ -263,14 +204,25 @@ class Event
 
             // Register the creator automatically
             if (!$this->registerUser($eventId, $_SESSION['user_id'], 'confirmed')) {
+                logger()->error('Failed to register creator for event', [
+                    'eventId' => $eventId,
+                    'userId' => $_SESSION['user_id']
+                ]);
                 $this->db->rollBack();
                 return false;
             }
 
             $this->db->commit();
+
+            logger()->info('Event created successfully', [
+                'eventId' => $eventId,
+                'title' => $data['title']
+            ]);
+
             return $eventId;
         } catch (PDOException $e) {
             $this->db->rollBack();
+            logDatabaseError($e->errorInfo, $query, $data);
             $this->errors['database'] = 'Database error: ' . $e->getMessage();
             return false;
         }
@@ -278,24 +230,41 @@ class Event
 
     public function update($data)
     {
-        if (!$this->validate($data)) {
-            return false;
-        }
-
         try {
+            logger()->info('Attempting to update event', [
+                'eventId' => $data['id'],
+                'title' => $data['title']
+            ]);
+
+            if (!$this->validate($data)) {
+                logger()->warning('Event update validation failed', [
+                    'eventId' => $data['id'],
+                    'errors' => $this->errors
+                ]);
+                return false;
+            }
+
             $this->db->beginTransaction();
 
             // Check if the event exists and belongs to the current user
             $event = $this->getEventById($data['id']);
             if (!$event || $event['creator_id'] !== $_SESSION['user_id']) {
+                logger()->warning('Unauthorized event update attempt', [
+                    'eventId' => $data['id'],
+                    'userId' => $_SESSION['user_id']
+                ]);
                 $this->errors['database'] = 'You do not have permission to edit this event';
                 $this->db->rollBack();
                 return false;
             }
 
             // Check capacity against current registrations
-            $registeredCount = $event['registered_count'];
-            if ($data['capacity'] < $registeredCount) {
+            if ($data['capacity'] < $event['registered_count']) {
+                logger()->warning('Invalid capacity update', [
+                    'eventId' => $data['id'],
+                    'newCapacity' => $data['capacity'],
+                    'currentRegistrations' => $event['registered_count']
+                ]);
                 $this->errors['capacity'] = 'New capacity cannot be less than current registrations';
                 $this->db->rollBack();
                 return false;
@@ -311,8 +280,7 @@ class Event
                      WHERE id = :id AND creator_id = :creator_id";
 
             $stmt = $this->db->prepare($query);
-
-            $result = $stmt->execute([
+            $stmt->execute([
                 'id' => $data['id'],
                 'creator_id' => $_SESSION['user_id'],
                 'title' => $data['title'],
@@ -323,19 +291,25 @@ class Event
                 'status' => $data['status']
             ]);
 
-            // If event is cancelled, cancel all pending registrations
+            // Handle status changes and capacity updates
             if ($data['status'] === 'cancelled') {
+                logger()->info('Cancelling all registrations for event', [
+                    'eventId' => $data['id']
+                ]);
+
                 $cancelQuery = "UPDATE registrations 
                               SET status = 'cancelled' 
                               WHERE event_id = ? AND status != 'cancelled'";
                 $cancelStmt = $this->db->prepare($cancelQuery);
                 $cancelStmt->execute([$data['id']]);
-            }
+            } elseif ($data['capacity'] > $event['capacity']) {
+                $newSpots = $data['capacity'] - $event['registered_count'];
 
-            // Check if capacity was increased
-            if ($data['capacity'] > $event['capacity']) {
-                // Move waitlisted registrations to confirmed if there's new capacity
-                $newSpots = $data['capacity'] - $registeredCount;
+                logger()->info('Processing waitlist due to capacity increase', [
+                    'eventId' => $data['id'],
+                    'newSpots' => $newSpots
+                ]);
+
                 if ($newSpots > 0) {
                     $updateWaitlistQuery = "UPDATE registrations 
                                           SET status = 'confirmed' 
@@ -345,14 +319,207 @@ class Event
                                           LIMIT ?";
                     $waitlistStmt = $this->db->prepare($updateWaitlistQuery);
                     $waitlistStmt->execute([$data['id'], $newSpots]);
+
+                    $confirmedCount = $waitlistStmt->rowCount();
+                    if ($confirmedCount > 0) {
+                        logger()->info('Confirmed waitlisted registrations', [
+                            'eventId' => $data['id'],
+                            'count' => $confirmedCount
+                        ]);
+                    }
                 }
             }
 
             $this->db->commit();
+
+            logger()->info('Event updated successfully', [
+                'eventId' => $data['id'],
+                'title' => $data['title'],
+                'status' => $data['status']
+            ]);
+
             return true;
         } catch (PDOException $e) {
             $this->db->rollBack();
+            logDatabaseError($e->errorInfo, $query, $data);
             $this->errors['database'] = 'Database error: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function delete($eventId, $userId)
+    {
+        try {
+            logger()->info('Attempting to delete event', [
+                'eventId' => $eventId,
+                'userId' => $userId
+            ]);
+
+            $this->db->beginTransaction();
+
+            // Check if user is the event creator
+            $event = $this->getEventById($eventId);
+            if (!$event || $event['creator_id'] !== $userId) {
+                logger()->warning('Unauthorized event deletion attempt', [
+                    'eventId' => $eventId,
+                    'userId' => $userId
+                ]);
+                $this->errors['permission'] = 'You do not have permission to delete this event';
+                $this->db->rollBack();
+                return false;
+            }
+
+            // Delete registrations first
+            $deleteRegistrationsQuery = "DELETE FROM registrations WHERE event_id = ?";
+            $deleteRegistrationsStmt = $this->db->prepare($deleteRegistrationsQuery);
+            $deleteRegistrationsStmt->execute([$eventId]);
+            $deletedRegistrations = $deleteRegistrationsStmt->rowCount();
+
+            logger()->info('Deleted event registrations', [
+                'eventId' => $eventId,
+                'count' => $deletedRegistrations
+            ]);
+
+            // Then delete the event
+            $deleteEventQuery = "DELETE FROM events WHERE id = ? AND creator_id = ?";
+            $deleteEventStmt = $this->db->prepare($deleteEventQuery);
+            $deleteEventStmt->execute([$eventId, $userId]);
+
+            if ($deleteEventStmt->rowCount() > 0) {
+                $this->db->commit();
+                logger()->info('Event deleted successfully', [
+                    'eventId' => $eventId,
+                    'title' => $event['title']
+                ]);
+                return true;
+            } else {
+                logger()->error('Failed to delete event', [
+                    'eventId' => $eventId
+                ]);
+                $this->db->rollBack();
+                $this->errors['database'] = 'Failed to delete event';
+                return false;
+            }
+        } catch (PDOException $e) {
+            $this->db->rollBack();
+            logDatabaseError($e->errorInfo, $deleteEventQuery ?? $deleteRegistrationsQuery ?? '', [$eventId, $userId]);
+            $this->errors['database'] = 'Database error: ' . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function validate($data)
+    {
+        logger()->debug('Validating event data', [
+            'title' => $data['title'],
+            'event_date' => $data['event_date']
+        ]);
+
+        $this->errors = [];
+
+        // Title validation
+        if (empty($data['title'])) {
+            $this->errors['title'] = 'Title is required';
+            logger()->warning('Event validation failed: Empty title');
+        } elseif (strlen($data['title']) > 100) {
+            $this->errors['title'] = 'Title must be less than 100 characters';
+            logger()->warning('Event validation failed: Title too long', [
+                'length' => strlen($data['title'])
+            ]);
+        }
+
+        // Description validation
+        if (empty($data['description'])) {
+            $this->errors['description'] = 'Description is required';
+            logger()->warning('Event validation failed: Empty description');
+        }
+
+        // Event date validation
+        if (empty($data['event_date'])) {
+            $this->errors['event_date'] = 'Event date is required';
+            logger()->warning('Event validation failed: Empty date');
+        } else {
+            $eventDate = strtotime($data['event_date']);
+            $now = time();
+            if ($eventDate < $now) {
+                $this->errors['event_date'] = 'Event date cannot be in the past';
+                logger()->warning('Event validation failed: Past date', [
+                    'event_date' => $data['event_date']
+                ]);
+            }
+        }
+
+        // Location validation
+        if (empty($data['location'])) {
+            $this->errors['location'] = 'Location is required';
+            logger()->warning('Event validation failed: Empty location');
+        } elseif (strlen($data['location']) > 255) {
+            $this->errors['location'] = 'Location must be less than 255 characters';
+            logger()->warning('Event validation failed: Location too long', [
+                'length' => strlen($data['location'])
+            ]);
+        }
+
+        // Capacity validation
+        if (empty($data['capacity'])) {
+            $this->errors['capacity'] = 'Capacity is required';
+            logger()->warning('Event validation failed: Empty capacity');
+        } elseif (!is_numeric($data['capacity']) || $data['capacity'] < 1) {
+            $this->errors['capacity'] = 'Capacity must be a positive number';
+            logger()->warning('Event validation failed: Invalid capacity', [
+                'capacity' => $data['capacity']
+            ]);
+        }
+
+        // Status validation
+        $validStatuses = ['draft', 'published', 'cancelled'];
+        if (!in_array($data['status'], $validStatuses)) {
+            $this->errors['status'] = 'Invalid status';
+            logger()->warning('Event validation failed: Invalid status', [
+                'status' => $data['status']
+            ]);
+        }
+
+        $isValid = empty($this->errors);
+        if ($isValid) {
+            logger()->info('Event validation passed', [
+                'title' => $data['title']
+            ]);
+        }
+
+        return $isValid;
+    }
+
+    public function getUserRegistrationStatus($eventId, $userId)
+    {
+        try {
+            logger()->debug('Checking user registration status', [
+                'eventId' => $eventId,
+                'userId' => $userId
+            ]);
+
+            $query = "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?";
+            $stmt = $this->db->prepare($query);
+            $stmt->execute([$eventId, $userId]);
+            $registration = $stmt->fetch();
+
+            if ($registration) {
+                logger()->info('Found user registration', [
+                    'eventId' => $eventId,
+                    'userId' => $userId,
+                    'status' => $registration['status']
+                ]);
+            } else {
+                logger()->debug('No registration found', [
+                    'eventId' => $eventId,
+                    'userId' => $userId
+                ]);
+            }
+
+            return $registration;
+        } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query, [$eventId, $userId]);
+            $this->errors['database'] = 'Error checking registration status: ' . $e->getMessage();
             return false;
         }
     }
@@ -360,12 +527,22 @@ class Event
     public function registerUser($eventId, $userId, $status = 'pending')
     {
         try {
+            logger()->info('Attempting to register user for event', [
+                'eventId' => $eventId,
+                'userId' => $userId,
+                'status' => $status
+            ]);
+
             // Check if user is already registered
             $checkQuery = "SELECT COUNT(*) FROM registrations WHERE user_id = ? AND event_id = ?";
             $checkStmt = $this->db->prepare($checkQuery);
             $checkStmt->execute([$userId, $eventId]);
 
             if ($checkStmt->fetchColumn() > 0) {
+                logger()->warning('User already registered', [
+                    'eventId' => $eventId,
+                    'userId' => $userId
+                ]);
                 $this->errors['registration'] = 'User is already registered for this event';
                 return false;
             }
@@ -383,10 +560,21 @@ class Event
             $capacityInfo = $capacityStmt->fetch();
 
             if ($capacityInfo && $capacityInfo['current_registrations'] >= $capacityInfo['capacity']) {
-                // If capacity is full and waitlist is requested, set status to waitlisted
                 if (isset($_POST['waitlist'])) {
                     $status = 'waitlisted';
+                    logger()->info('Adding user to waitlist (capacity full)', [
+                        'eventId' => $eventId,
+                        'userId' => $userId,
+                        'currentRegistrations' => $capacityInfo['current_registrations'],
+                        'capacity' => $capacityInfo['capacity']
+                    ]);
                 } else {
+                    logger()->warning('Registration failed - capacity full', [
+                        'eventId' => $eventId,
+                        'userId' => $userId,
+                        'currentRegistrations' => $capacityInfo['current_registrations'],
+                        'capacity' => $capacityInfo['capacity']
+                    ]);
                     $this->errors['registration'] = 'Event has reached maximum capacity';
                     return false;
                 }
@@ -399,8 +587,15 @@ class Event
             $registrationStmt = $this->db->prepare($registrationQuery);
             $registrationStmt->execute([$userId, $eventId, $status]);
 
+            logger()->info('User registration successful', [
+                'eventId' => $eventId,
+                'userId' => $userId,
+                'status' => $status
+            ]);
+
             return true;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $registrationQuery ?? '', [$userId, $eventId, $status]);
             $this->errors['registration'] = 'Registration failed: ' . $e->getMessage();
             return false;
         }
@@ -409,6 +604,10 @@ class Event
     public function getEventRegistrations($userId)
     {
         try {
+            logger()->debug('Fetching event registrations', [
+                'organizerId' => $userId
+            ]);
+
             $query = "SELECT r.*, u.username, e.title as event_title, e.event_date,
                      (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count,
                      e.capacity
@@ -421,9 +620,16 @@ class Event
 
             $stmt = $this->db->prepare($query);
             $stmt->execute([$userId]);
+            $registrations = $stmt->fetchAll();
 
-            return $stmt->fetchAll();
+            logger()->info('Successfully fetched event registrations', [
+                'organizerId' => $userId,
+                'count' => count($registrations)
+            ]);
+
+            return $registrations;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query, [$userId]);
             $this->errors['database'] = 'Error fetching registrations: ' . $e->getMessage();
             return false;
         }
@@ -432,6 +638,12 @@ class Event
     public function updateRegistrationStatus($registrationId, $newStatus, $userId)
     {
         try {
+            logger()->info('Attempting to update registration status', [
+                'registrationId' => $registrationId,
+                'newStatus' => $newStatus,
+                'userId' => $userId
+            ]);
+
             // Verify that the user is the event creator
             $query = "SELECT e.creator_id, e.capacity, r.event_id,
                      (SELECT COUNT(*) FROM registrations 
@@ -445,6 +657,10 @@ class Event
             $registration = $stmt->fetch();
 
             if (!$registration || $registration['creator_id'] !== $userId) {
+                logger()->warning('Unauthorized registration status update attempt', [
+                    'registrationId' => $registrationId,
+                    'userId' => $userId
+                ]);
                 $this->errors['permission'] = 'You do not have permission to update this registration';
                 return false;
             }
@@ -454,6 +670,12 @@ class Event
                 $newStatus === 'confirmed' &&
                 $registration['confirmed_count'] >= $registration['capacity']
             ) {
+                logger()->warning('Cannot confirm registration - capacity full', [
+                    'registrationId' => $registrationId,
+                    'eventId' => $registration['event_id'],
+                    'currentConfirmed' => $registration['confirmed_count'],
+                    'capacity' => $registration['capacity']
+                ]);
                 $this->errors['capacity'] = 'Event has reached maximum capacity';
                 return false;
             }
@@ -462,12 +684,23 @@ class Event
             $stmt = $this->db->prepare($query);
             $stmt->execute([$newStatus, $registrationId]);
 
+            logger()->info('Registration status updated successfully', [
+                'registrationId' => $registrationId,
+                'newStatus' => $newStatus,
+                'eventId' => $registration['event_id']
+            ]);
+
             return true;
         } catch (PDOException $e) {
+            logDatabaseError($e->errorInfo, $query, [$newStatus, $registrationId]);
             $this->errors['database'] = 'Error updating registration: ' . $e->getMessage();
             return false;
         }
     }
+
+    // Other methods with logging...
+    // To keep the response concise, I've focused on the main methods
+    // Let me know if you want to see logging implementation for other methods!
 
     public function getErrors()
     {
