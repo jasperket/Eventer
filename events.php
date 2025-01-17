@@ -7,8 +7,6 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-require_once 'includes/Event.php';
-
 $event = new Event();
 $events = $event->getUpcomingEvents();
 $errors = $event->getErrors();

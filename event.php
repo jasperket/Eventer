@@ -7,8 +7,6 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-require_once 'includes/Event.php';
-
 // Get event ID from URL
 $eventId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 if (!$eventId) {

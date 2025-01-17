@@ -6,8 +6,6 @@ if (isset($_SESSION['user_id'])) {
     exit();
 }
 
-require_once 'includes/User.php';
-
 $user = new User();
 $errors = [];
 $old = [];

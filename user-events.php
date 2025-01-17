@@ -7,8 +7,6 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-require_once 'includes/Event.php';
-
 $event = new Event();
 $hostedEvents = $event->getHostedEvents($_SESSION['user_id']);
 $registeredEvents = $event->getRegisteredEvents($_SESSION['user_id']);
