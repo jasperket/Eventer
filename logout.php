@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'includes/bootstrap.php';
 
 // Clear all session variables
 $_SESSION = array();

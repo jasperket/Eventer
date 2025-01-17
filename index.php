@@ -1,3 +1,4 @@
+<?php require_once 'includes/bootstrap.php' ?>
 <?php require_once 'includes/nav-guest.php' ?>
 
 <main class="text-center h-full flex-1 flex flex-col gap-8 items-center">

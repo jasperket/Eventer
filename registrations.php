@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'includes/bootstrap.php';
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -15,7 +15,7 @@ $event = new Event();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $registrationId = filter_input(INPUT_POST, 'registration_id', FILTER_VALIDATE_INT);
     $newStatus = $_POST['new_status'] ?? '';
-    
+
     if ($registrationId && in_array($newStatus, ['confirmed', 'waitlisted', 'cancelled'])) {
         if ($event->updateRegistrationStatus($registrationId, $newStatus, $_SESSION['user_id'])) {
             $_SESSION['success'] = 'Registration status updated successfully';
@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $_SESSION['error'] = 'Invalid request';
     }
-    
+
     header('Location: registrations.php');
     exit();
 }
@@ -39,7 +39,7 @@ require_once 'includes/nav-auth.php';
 <main class="py-12">
     <?php if (isset($_SESSION['success'])): ?>
         <div class="mb-6 bg-green-500/10 border border-green-500 text-green-500 px-4 py-2 rounded">
-            <?php 
+            <?php
             echo htmlspecialchars($_SESSION['success']);
             unset($_SESSION['success']);
             ?>
@@ -48,7 +48,7 @@ require_once 'includes/nav-auth.php';
 
     <?php if (isset($_SESSION['error'])): ?>
         <div class="mb-6 bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded">
-            <?php 
+            <?php
             echo htmlspecialchars($_SESSION['error']);
             unset($_SESSION['error']);
             ?>
@@ -130,8 +130,8 @@ require_once 'includes/nav-auth.php';
                                             Cancel
                                         </option>
                                     </select>
-                                    <button type="submit" 
-                                            class="px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-500">
+                                    <button type="submit"
+                                        class="px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-500">
                                         Update
                                     </button>
                                 </form>

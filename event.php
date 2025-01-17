@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'includes/bootstrap.php';
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -36,7 +36,7 @@ require_once 'includes/nav-auth.php';
 <main class="py-12">
     <?php if (isset($_SESSION['success'])): ?>
         <div class="mb-6 bg-green-500/10 border border-green-500 text-green-500 px-4 py-2 rounded">
-            <?php 
+            <?php
             echo htmlspecialchars($_SESSION['success']);
             unset($_SESSION['success']);
             ?>
@@ -45,7 +45,7 @@ require_once 'includes/nav-auth.php';
 
     <?php if (isset($_SESSION['error'])): ?>
         <div class="mb-6 bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded">
-            <?php 
+            <?php
             echo htmlspecialchars($_SESSION['error']);
             unset($_SESSION['error']);
             ?>
@@ -64,15 +64,15 @@ require_once 'includes/nav-auth.php';
 
                 <?php if ($isCreator): ?>
                     <div class="flex gap-2">
-                        <a href="edit-event.php?id=<?php echo $eventId; ?>" 
-                           class="px-4 py-2 bg-neutral-800 text-white rounded hover:bg-neutral-700">
+                        <a href="edit-event.php?id=<?php echo $eventId; ?>"
+                            class="px-4 py-2 bg-neutral-800 text-white rounded hover:bg-neutral-700">
                             Edit Event
                         </a>
-                        <form action="delete-event.php" method="post" class="inline" 
-                              onsubmit="return confirm('Are you sure you want to delete this event?');">
+                        <form action="delete-event.php" method="post" class="inline"
+                            onsubmit="return confirm('Are you sure you want to delete this event?');">
                             <input type="hidden" name="event_id" value="<?php echo $eventId; ?>">
-                            <button type="submit" 
-                                    class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500">
+                            <button type="submit"
+                                class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500">
                                 Delete Event
                             </button>
                         </form>
@@ -96,7 +96,7 @@ require_once 'includes/nav-auth.php';
                                 </svg>
                                 <span><?php echo date('F j, Y \a\t g:i A', strtotime($eventDetails['event_date'])); ?></span>
                             </div>
-                            
+
                             <div class="flex items-center gap-2 text-neutral-400">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -127,7 +127,7 @@ require_once 'includes/nav-auth.php';
                 <div>
                     <div class="bg-neutral-800 p-6 rounded-lg">
                         <h2 class="text-2xl font-bold mb-4">Registration</h2>
-                        
+
                         <?php if (!$isCreator): ?>
                             <?php if (!$userRegistration): ?>
                                 <?php if ($eventDetails['registered_count'] < $eventDetails['capacity']): ?>
@@ -149,12 +149,12 @@ require_once 'includes/nav-auth.php';
                             <?php else: ?>
                                 <div class="text-center">
                                     <p class="mb-4">
-                                        Your registration status: 
+                                        Your registration status:
                                         <span class="font-bold capitalize"><?php echo htmlspecialchars($userRegistration['status']); ?></span>
                                     </p>
                                     <?php if ($userRegistration['status'] !== 'cancelled'): ?>
-                                        <form action="cancel-registration.php" method="post" 
-                                              onsubmit="return confirm('Are you sure you want to cancel your registration?');">
+                                        <form action="cancel-registration.php" method="post"
+                                            onsubmit="return confirm('Are you sure you want to cancel your registration?');">
                                             <input type="hidden" name="event_id" value="<?php echo $eventId; ?>">
                                             <button type="submit" class="w-full bg-red-600 text-white font-bold py-2 rounded hover:bg-red-500">
                                                 Cancel Registration

@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'includes/bootstrap.php';
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -44,9 +44,9 @@ require_once 'includes/nav-auth.php';
                                 <?php echo $event['registered_count']; ?>/<?php echo $event['capacity']; ?> registered
                             </span>
                         </div>
-                        
+
                         <p class="text-neutral-400 mb-4 line-clamp-3"><?php echo htmlspecialchars($event['description']); ?></p>
-                        
+
                         <div class="space-y-2 text-sm text-neutral-400">
                             <div class="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 shrink-0">
@@ -54,7 +54,7 @@ require_once 'includes/nav-auth.php';
                                 </svg>
                                 <span class="truncate"><?php echo date('F j, Y \a\t g:i A', strtotime($event['event_date'])); ?></span>
                             </div>
-                            
+
                             <div class="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 shrink-0">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -62,7 +62,7 @@ require_once 'includes/nav-auth.php';
                                 </svg>
                                 <span class="truncate"><?php echo htmlspecialchars($event['location']); ?></span>
                             </div>
-                            
+
                             <div class="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 shrink-0">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
@@ -70,10 +70,10 @@ require_once 'includes/nav-auth.php';
                                 <span class="truncate">Organized by <?php echo htmlspecialchars($event['creator_name']); ?></span>
                             </div>
                         </div>
-                        
+
                         <div class="mt-6">
-                            <a href="event.php?id=<?php echo $event['id']; ?>" 
-                               class="block w-full bg-red-600 text-center text-white font-bold py-2 rounded-lg hover:bg-red-500">
+                            <a href="event.php?id=<?php echo $event['id']; ?>"
+                                class="block w-full bg-red-600 text-center text-white font-bold py-2 rounded-lg hover:bg-red-500">
                                 View Details
                             </a>
                         </div>

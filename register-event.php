@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'includes/bootstrap.php';
 
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
@@ -11,7 +11,7 @@ require_once 'includes/Event.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $eventId = filter_input(INPUT_POST, 'event_id', FILTER_VALIDATE_INT);
-    
+
     if (!$eventId) {
         $_SESSION['error'] = 'Invalid event ID';
         header('Location: events.php');
