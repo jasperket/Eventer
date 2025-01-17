@@ -58,3 +58,22 @@ INSERT INTO events (creator_id, title, description, event_date, location, capaci
 -- Insert sample registration
 INSERT INTO registrations (user_id, event_id, status) VALUES 
 (1, 1, 'confirmed');
+
+-- Add indexes to users table for role-based queries
+ALTER TABLE users ADD INDEX idx_role (role);
+ALTER TABLE users ADD INDEX idx_created_at (created_at);
+
+-- Add indexes to events table for common queries and sorting
+ALTER TABLE events ADD INDEX idx_creator_status (creator_id, status);
+ALTER TABLE events ADD INDEX idx_created_at (created_at);
+ALTER TABLE events ADD INDEX idx_upcoming_events (status, event_date);
+ALTER TABLE events ADD INDEX idx_capacity (capacity);
+
+-- Add indexes to registrations table for status checks and event management
+ALTER TABLE registrations ADD INDEX idx_user_status (user_id, status);
+ALTER TABLE registrations ADD INDEX idx_event_status (event_id, status);
+ALTER TABLE registrations ADD INDEX idx_registered_at (registered_at);
+
+-- Add composite indexes for common joins and complex queries
+ALTER TABLE events ADD INDEX idx_event_search (status, event_date, creator_id);
+ALTER TABLE registrations ADD INDEX idx_registration_management (event_id, status, registered_at);
