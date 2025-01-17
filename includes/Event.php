@@ -11,15 +11,22 @@ class Event
         $this->db = Database::getInstance()->getConnection();
     }
 
+    /**
+     * Get all upcoming published events
+     */
     public function getUpcomingEvents()
     {
         try {
             $query = "SELECT e.*, u.username as creator_name,
-                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count
+                     COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
                      JOIN users u ON e.creator_id = u.id
+                     LEFT JOIN registrations r ON e.id = r.event_id
                      WHERE e.event_date > NOW()
                      AND e.status = 'published'
+                     GROUP BY e.id, e.creator_id, e.title, e.description, e.event_date, 
+                              e.location, e.capacity, e.status, e.created_at, e.updated_at,
+                              u.username
                      ORDER BY e.event_date ASC";
 
             $stmt = $this->db->prepare($query);
@@ -32,14 +39,21 @@ class Event
         }
     }
 
+    /**
+     * Get all events hosted by a specific user
+     */
     public function getHostedEvents($userId)
     {
         try {
             $query = "SELECT e.*, u.username as creator_name,
-                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count
+                     COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
                      JOIN users u ON e.creator_id = u.id
+                     LEFT JOIN registrations r ON e.id = r.event_id
                      WHERE e.creator_id = ?
+                     GROUP BY e.id, e.creator_id, e.title, e.description, e.event_date, 
+                              e.location, e.capacity, e.status, e.created_at, e.updated_at,
+                              u.username
                      ORDER BY 
                         CASE 
                             WHEN e.status = 'published' AND e.event_date > NOW() THEN 1
@@ -58,16 +72,23 @@ class Event
         }
     }
 
+
+    /**
+     * Get all events a user has registered for
+     */
     public function getRegisteredEvents($userId)
     {
         try {
             $query = "SELECT e.*, u.username as creator_name,
-                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count,
-                     r.status as registration_status
+                     r.status as registration_status,
+                     COUNT(DISTINCT r2.id) as registered_count
                      FROM events e
                      JOIN users u ON e.creator_id = u.id
-                     JOIN registrations r ON e.id = r.event_id
-                     WHERE r.user_id = ?
+                     JOIN registrations r ON e.id = r.event_id AND r.user_id = ?
+                     LEFT JOIN registrations r2 ON e.id = r2.event_id AND r2.status != 'cancelled'
+                     GROUP BY e.id, e.creator_id, e.title, e.description, e.event_date, 
+                              e.location, e.capacity, e.status, e.created_at, e.updated_at,
+                              u.username, r.status
                      ORDER BY 
                         CASE 
                             WHEN e.event_date > NOW() AND r.status IN ('confirmed', 'pending', 'waitlisted') THEN 1
@@ -86,14 +107,21 @@ class Event
         }
     }
 
+    /**
+     * Get a specific event by ID with registration count
+     */
     public function getEventById($eventId)
     {
         try {
             $query = "SELECT e.*, u.username as creator_name,
-                     (SELECT COUNT(*) FROM registrations WHERE event_id = e.id AND status != 'cancelled') as registered_count
+                     COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
                      JOIN users u ON e.creator_id = u.id
-                     WHERE e.id = ?";
+                     LEFT JOIN registrations r ON e.id = r.event_id
+                     WHERE e.id = ?
+                     GROUP BY e.id, e.creator_id, e.title, e.description, e.event_date,
+                              e.location, e.capacity, e.status, e.created_at, e.updated_at,
+                              u.username";
 
             $stmt = $this->db->prepare($query);
             $stmt->execute([$eventId]);
