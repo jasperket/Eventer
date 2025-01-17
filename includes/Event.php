@@ -3,11 +3,18 @@ require_once 'Database.php';
 require_once 'Logger.php';
 require_once 'logger-utils.php';
 
+/**
+ * Event class handles all event-related operations including CRUD operations
+ * and registration management
+ */
 class Event
 {
     private $db;
     private $errors = [];
 
+    /**
+     * Initialize database connection
+     */
     public function __construct()
     {
         try {
@@ -19,11 +26,15 @@ class Event
         }
     }
 
+    /**
+     * Get upcoming published events with registration counts
+     */
     public function getUpcomingEvents()
     {
         try {
             logger()->debug('Fetching upcoming events');
 
+            // Get published events with registration count, joined with creator info
             $query = "SELECT e.*, u.username as creator_name,
                      COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
@@ -52,11 +63,16 @@ class Event
         }
     }
 
+    /**
+     * Get events created by a specific user
+     * Sorted by status and date (active published events first)
+     */
     public function getHostedEvents($userId)
     {
         try {
             logger()->debug('Fetching hosted events', ['userId' => $userId]);
 
+            // Get events with registration count, filtered by creator
             $query = "SELECT e.*, u.username as creator_name,
                      COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
@@ -91,11 +107,16 @@ class Event
         }
     }
 
+    /**
+     * Get events that a user has registered for
+     * Includes registration status and sorted by upcoming active registrations first
+     */
     public function getRegisteredEvents($userId)
     {
         try {
             logger()->debug('Fetching registered events', ['userId' => $userId]);
 
+            // Get events with registration status and count
             $query = "SELECT e.*, u.username as creator_name,
                      r.status as registration_status,
                      COUNT(DISTINCT r2.id) as registered_count
@@ -131,11 +152,16 @@ class Event
         }
     }
 
+    /**
+     * Get detailed event information by ID
+     * Includes creator info and registration count
+     */
     public function getEventById($eventId)
     {
         try {
             logger()->debug('Fetching event details', ['eventId' => $eventId]);
 
+            // Get event with creator info and registration count
             $query = "SELECT e.*, u.username as creator_name,
                      COUNT(CASE WHEN r.status != 'cancelled' THEN 1 END) as registered_count
                      FROM events e
@@ -168,6 +194,9 @@ class Event
         }
     }
 
+    /**
+     * Create a new event and automatically register the creator
+     */
     public function create($data)
     {
         try {
@@ -176,6 +205,7 @@ class Event
                 'creator_id' => $_SESSION['user_id']
             ]);
 
+            // Validate event data before creation
             if (!$this->validate($data)) {
                 logger()->warning('Event validation failed', [
                     'errors' => $this->errors
@@ -185,6 +215,7 @@ class Event
 
             $this->db->beginTransaction();
 
+            // Insert event record
             $query = "INSERT INTO events (creator_id, title, description, event_date, location, capacity, status) 
                      VALUES (:creator_id, :title, :description, :event_date, :location, :capacity, :status)";
 
@@ -228,6 +259,10 @@ class Event
         }
     }
 
+    /**
+     * Update event details and handle status/capacity changes
+     * Updates waitlist if capacity increases
+     */
     public function update($data)
     {
         try {
@@ -347,6 +382,10 @@ class Event
         }
     }
 
+    /**
+     * Delete an event and all its registrations
+     * Verifies event ownership before deletion
+     */
     public function delete($eventId, $userId)
     {
         try {
@@ -408,6 +447,10 @@ class Event
         }
     }
 
+    /**
+     * Validate event data before creation or update
+     * Checks title, description, date, location, capacity, and status
+     */
     public function validate($data)
     {
         logger()->debug('Validating event data', [
@@ -490,6 +533,9 @@ class Event
         return $isValid;
     }
 
+    /**
+     * Get registration status of a specific user for an event
+     */
     public function getUserRegistrationStatus($eventId, $userId)
     {
         try {
@@ -524,6 +570,10 @@ class Event
         }
     }
 
+    /**
+     * Register a user for an event
+     * Handles capacity checks and waitlist functionality
+     */
     public function registerUser($eventId, $userId, $status = 'pending')
     {
         try {
@@ -533,7 +583,7 @@ class Event
                 'status' => $status
             ]);
 
-            // Check if user is already registered
+            // Check for existing registration
             $checkQuery = "SELECT COUNT(*) FROM registrations WHERE user_id = ? AND event_id = ?";
             $checkStmt = $this->db->prepare($checkQuery);
             $checkStmt->execute([$userId, $eventId]);
@@ -547,7 +597,7 @@ class Event
                 return false;
             }
 
-            // Check event capacity
+            // Check event capacity and handle waitlist
             $capacityQuery = "SELECT e.capacity, COUNT(r.id) as current_registrations 
                             FROM events e 
                             LEFT JOIN registrations r ON e.id = r.event_id 
@@ -601,6 +651,10 @@ class Event
         }
     }
 
+    /**
+     * Get all registrations for events created by a user
+     * Returns pending and waitlisted registrations for review
+     */
     public function getEventRegistrations($userId)
     {
         try {
@@ -635,6 +689,10 @@ class Event
         }
     }
 
+    /**
+     * Update registration status and handle capacity management
+     * Only event creator can update registration status
+     */
     public function updateRegistrationStatus($registrationId, $newStatus, $userId)
     {
         try {
@@ -644,7 +702,7 @@ class Event
                 'userId' => $userId
             ]);
 
-            // Verify that the user is the event creator
+            // Verify event ownership and check capacity
             $query = "SELECT e.creator_id, e.capacity, r.event_id,
                      (SELECT COUNT(*) FROM registrations 
                       WHERE event_id = r.event_id AND status = 'confirmed') as confirmed_count
@@ -665,7 +723,7 @@ class Event
                 return false;
             }
 
-            // If changing to confirmed, check capacity
+            // Check capacity before confirming
             if (
                 $newStatus === 'confirmed' &&
                 $registration['confirmed_count'] >= $registration['capacity']
@@ -697,10 +755,6 @@ class Event
             return false;
         }
     }
-
-    // Other methods with logging...
-    // To keep the response concise, I've focused on the main methods
-    // Let me know if you want to see logging implementation for other methods!
 
     public function getErrors()
     {

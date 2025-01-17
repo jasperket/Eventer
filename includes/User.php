@@ -1,13 +1,20 @@
 <?php
+// Required dependencies for database, logging and utilities
 require_once 'Database.php';
 require_once 'Logger.php';
 require_once 'logger-utils.php';
 
+/**
+ * User class handles user authentication and registration
+ */
 class User
 {
     private $db;
-    private $errors = [];
+    private $errors = []; // Stores validation and operation errors
 
+    /**
+     * Initialize database connection
+     */
     public function __construct()
     {
         try {
@@ -18,6 +25,10 @@ class User
         }
     }
 
+    /**
+     * Validate user registration data
+     * Checks username, email and password requirements
+     */
     public function validateRegistration($data)
     {
         $this->errors = [];
@@ -75,6 +86,9 @@ class User
         return $isValid;
     }
 
+    /**
+     * Check if username already exists in database
+     */
     private function usernameExists($username)
     {
         try {
@@ -87,6 +101,9 @@ class User
         }
     }
 
+    /**
+     * Check if email already exists in database
+     */
     private function emailExists($email)
     {
         try {
@@ -99,6 +116,10 @@ class User
         }
     }
 
+    /**
+     * Register new user with validated data
+     * Returns user ID on success, false on failure
+     */
     public function register($data)
     {
         if (!$this->validateRegistration($data)) {
@@ -147,6 +168,10 @@ class User
         }
     }
 
+    /**
+     * Authenticate user and create session
+     * Returns true on success, false on failure
+     */
     public function login($username, $password)
     {
         try {
@@ -186,6 +211,9 @@ class User
         }
     }
 
+    /**
+     * Get any errors that occurred during operations
+     */
     public function getErrors()
     {
         return $this->errors;

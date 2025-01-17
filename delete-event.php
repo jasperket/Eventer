@@ -7,6 +7,7 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Delete event
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $eventId = filter_input(INPUT_POST, 'event_id', FILTER_VALIDATE_INT);
 
